@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabase";
 
@@ -389,6 +390,96 @@ export default function CRM() {
       alert("Não foi possível excluir o contato.");
     }
   }
+  function baixarModeloPlanilha() {
+  const modelo = [
+    {
+      empresa: "Farmácia Exemplo",
+      responsavel: "Nome do responsável",
+      whatsapp: "21999999999",
+      bairro: "Tijuca",
+      regiao: "Rua Conde de Bonfim, 229",
+      zona: "Grande Tijuca (Tijuca, Vila Isabel...)",
+      volume: "Premium 200",
+      temperatura: "Morno",
+      origem: "Importação",
+      dor: "Instabilidade nas entregas",
+      proxima_acao: "Pesquisar decisor",
+      data_proxima_acao: "2026-05-25",
+    },
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(modelo);
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Modelo Leads");
+
+  XLSX.writeFile(workbook, "modelo-importacao-leads-mdl.xlsx");
+}
+  async function importarPlanilha(event) {
+  const arquivo = event.target.files?.[0];
+
+  if (!arquivo) return;
+
+  const reader = new FileReader();
+
+  reader.onload = async (e) => {
+    try {
+      const data = e.target.result;
+
+      const workbook = XLSX.read(data, {
+        type: "binary",
+      });
+
+      const sheetName = workbook.SheetNames[0];
+
+      const sheet = workbook.Sheets[sheetName];
+
+      const json = XLSX.utils.sheet_to_json(sheet);
+
+      if (!json.length) {
+        alert("A planilha está vazia.");
+        return;
+      }
+
+      const leadsImportados = json.map((item) => ({
+        empresa: item.empresa || item.Empresa || "",
+        responsavel: item.responsavel || item.Responsavel || "",
+        whatsapp: item.whatsapp || item.WhatsApp || "",
+        bairro: item.bairro || item.Bairro || "",
+        regiao: item.regiao || item.Regiao || "",
+        zona: item.zona || item.Zona || "",
+        temperatura: item.temperatura || "Morno",
+        origem: item.origem || "Importação",
+        volume: item.volume || "Premium 200",
+        etapa: "Lead Novo",
+        acao_etapa:
+          "1. Pesquisa web para obter dados do decisor ou dono com CNPJ",
+        valor_estimado:
+          planos[item.volume] || planos["Premium 200"],
+        user_id: usuario.id,
+      }));
+
+      const { error } = await supabase
+        .from("leads")
+        .insert(leadsImportados);
+
+      if (error) {
+        console.error(error);
+        alert("Erro ao importar planilha.");
+        return;
+      }
+
+      alert(`${leadsImportados.length} leads importados com sucesso.`);
+
+      await carregarLeads();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao processar a planilha.");
+    }
+  };
+
+  reader.readAsBinaryString(arquivo);
+}
 
   async function sair() {
     await supabase.auth.signOut();
@@ -407,28 +498,71 @@ export default function CRM() {
     <main className="page">
       <section className="container">
         <header className="header">
-          <div>
-            <p className="brand">MDL EXPRESS</p>
-            <h1>CRM Comercial — Last Mile Farmacêutico</h1>
-            <p className="muted">
-              Movimento • Disciplina • Lógica aplicados à captação e relacionamento B2B.
-            </p>
-            {isMaster && (
-              <p className="muted">
-                Acesso master: edição e exclusão liberadas.
-              </p>
-            )}
-          </div>
+  <div>
+    <p className="brand">MDL EXPRESS</p>
 
-          <div className="actions">
-            <button onClick={() => setFormAberto(!formAberto)}>
-              + Novo Lead
-            </button>
-            <button className="secondary" onClick={sair}>
-              Sair
-            </button>
-          </div>
-        </header>
+    <h1>CRM Comercial — Last Mile Farmacêutico</h1>
+
+    <p className="muted">
+      Movimento • Disciplina • Lógica aplicados à captação e relacionamento B2B.
+    </p>
+
+    {isMaster && (
+      <p className="muted">
+        Acesso master: edição e exclusão liberadas.
+      </p>
+    )}
+  </div>
+
+  <div
+    className="actions"
+    style={{
+      display: "flex",
+      gap: "12px",
+      alignItems: "center",
+      flexWrap: "wrap",
+    }}
+  >
+    <button onClick={() => setFormAberto(!formAberto)}>
+      + Novo Lead
+    </button>
+
+    <button
+      className="secondary"
+      onClick={baixarModeloPlanilha}
+    >
+      Baixar modelo
+    </button>
+
+    <label
+      className="secondary uploadButton"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "14px 22px",
+        borderRadius: "14px",
+        cursor: "pointer",
+      }}
+    >
+      Importar Planilha
+
+      <input
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        onChange={importarPlanilha}
+        hidden
+      />
+    </label>
+    <button className="secondary" onClick={() => router.push("/crm-kanban")}>
+  Gestão Comercial
+</button>
+
+    <button className="secondary" onClick={sair}>
+      Sair
+    </button>
+  </div>
+</header>
 
         <section className="metrics">
           <Metric
@@ -796,69 +930,29 @@ function LeadCard({
         <h3>Editando lead</h3>
 
         <div className="grid">
-          <input
-            value={draft.empresa || ""}
-            onChange={(e) => alterarDraft("empresa", e.target.value)}
-          />
+          <input value={draft.empresa || ""} onChange={(e) => alterarDraft("empresa", e.target.value)} />
+          <input value={draft.responsavel || ""} onChange={(e) => alterarDraft("responsavel", e.target.value)} />
+          <input value={draft.whatsapp || ""} onChange={(e) => alterarDraft("whatsapp", e.target.value)} />
+          <input value={draft.bairro || ""} onChange={(e) => alterarDraft("bairro", e.target.value)} />
+          <input value={draft.regiao || ""} onChange={(e) => alterarDraft("regiao", e.target.value)} />
+          <input type="text" value={draft.valor_estimado || ""} onChange={(e) => alterarDraft("valor_estimado", e.target.value)} />
 
-          <input
-            value={draft.responsavel || ""}
-            onChange={(e) => alterarDraft("responsavel", e.target.value)}
-          />
-
-          <input
-            value={draft.whatsapp || ""}
-            onChange={(e) => alterarDraft("whatsapp", e.target.value)}
-          />
-
-          <select
-            value={draft.zona || ""}
-            onChange={(e) => alterarDraft("zona", e.target.value)}
-          >
+          <select value={draft.zona || ""} onChange={(e) => alterarDraft("zona", e.target.value)}>
             <option value="">Selecione a zona comercial</option>
-            {zonas.map((zona) => (
-              <option key={zona}>{zona}</option>
-            ))}
+            {zonas.map((zona) => <option key={zona}>{zona}</option>)}
           </select>
 
-          <input
-            value={draft.bairro || ""}
-            onChange={(e) => alterarDraft("bairro", e.target.value)}
-          />
-
-          <input
-            value={draft.regiao || ""}
-            onChange={(e) => alterarDraft("regiao", e.target.value)}
-          />
-
-          <select
-            value={draft.volume || "Premium 200"}
-            onChange={(e) => alterarDraft("volume", e.target.value)}
-          >
-            {Object.keys(planos).map((plano) => (
-              <option key={plano}>{plano}</option>
-            ))}
+          <select value={draft.volume || "Premium 200"} onChange={(e) => alterarDraft("volume", e.target.value)}>
+            {Object.keys(planos).map((plano) => <option key={plano}>{plano}</option>)}
           </select>
 
-          <input
-            type="number"
-            value={draft.valor_estimado || ""}
-            onChange={(e) => alterarDraft("valor_estimado", e.target.value)}
-          />
-
-          <select
-            value={draft.temperatura || "Morno"}
-            onChange={(e) => alterarDraft("temperatura", e.target.value)}
-          >
+          <select value={draft.temperatura || "Morno"} onChange={(e) => alterarDraft("temperatura", e.target.value)}>
             <option>Quente</option>
             <option>Morno</option>
             <option>Frio</option>
           </select>
 
-          <select
-            value={draft.origem || "Prospecção ativa"}
-            onChange={(e) => alterarDraft("origem", e.target.value)}
-          >
+          <select value={draft.origem || "Prospecção ativa"} onChange={(e) => alterarDraft("origem", e.target.value)}>
             <option>Site</option>
             <option>WhatsApp</option>
             <option>Instagram</option>
@@ -866,40 +960,21 @@ function LeadCard({
             <option>LinkedIn</option>
             <option>Prospecção ativa</option>
             <option>Visita porta a porta</option>
+            <option>Importação</option>
           </select>
 
-          <select
-            value={draft.acao_etapa || acoes[0]}
-            onChange={(e) => alterarDraft("acao_etapa", e.target.value)}
-          >
-            {acoes.map((acao) => (
-              <option key={acao}>{acao}</option>
-            ))}
+          <select value={draft.acao_etapa || acoes[0]} onChange={(e) => alterarDraft("acao_etapa", e.target.value)}>
+            {acoes.map((acao) => <option key={acao}>{acao}</option>)}
           </select>
 
-          <input
-            value={draft.dor || ""}
-            onChange={(e) => alterarDraft("dor", e.target.value)}
-          />
-
-          <input
-            value={draft.proxima_acao || ""}
-            onChange={(e) => alterarDraft("proxima_acao", e.target.value)}
-          />
-
-          <input
-            type="date"
-            value={draft.data_proxima_acao || ""}
-            onChange={(e) => alterarDraft("data_proxima_acao", e.target.value)}
-          />
+          <input value={draft.dor || ""} onChange={(e) => alterarDraft("dor", e.target.value)} />
+          <input value={draft.proxima_acao || ""} onChange={(e) => alterarDraft("proxima_acao", e.target.value)} />
+          <input type="date" value={draft.data_proxima_acao || ""} onChange={(e) => alterarDraft("data_proxima_acao", e.target.value)} />
         </div>
 
         <div className="actions">
           <button onClick={salvar}>Salvar edição</button>
-
-          <button className="secondary" onClick={() => setEditando(false)}>
-            Cancelar
-          </button>
+          <button className="secondary" onClick={() => setEditando(false)}>Cancelar</button>
         </div>
       </article>
     );
@@ -919,48 +994,16 @@ function LeadCard({
       </div>
 
       <div className="info">
-        <p>
-          <b>Criado em:</b>{" "}
-          {lead.created_at
-            ? new Date(lead.created_at).toLocaleDateString("pt-BR")
-            : "Não informado"}
-        </p>
-
-        <p>
-          <b>WhatsApp:</b> {lead.whatsapp}
-        </p>
-
-        <p>
-          <b>Zona:</b> {lead.zona || "Não definida"}
-        </p>
-
-        <p>
-          <b>Bairro:</b> {lead.bairro || "Não definido"}
-        </p>
-
-        <p>
-          <b>Região/Endereço:</b> {lead.regiao}
-        </p>
-
-        <p>
-          <b>Tipo/Porte:</b> {lead.tipo} • {lead.porte}
-        </p>
-
-        <p>
-          <b>Origem:</b> {lead.origem}
-        </p>
-
-        <p>
-          <b>Plano:</b> {lead.volume}
-        </p>
-
-        <p>
-          <b>Estimativa:</b> R$ {Number(lead.valor_estimado || 0).toLocaleString("pt-BR")}/mês
-        </p>
-
-        <p>
-          <b>Ação atual:</b> {lead.acao_etapa || "Não definida"}
-        </p>
+        <p><b>Criado em:</b> {lead.created_at ? new Date(lead.created_at).toLocaleDateString("pt-BR") : "Não informado"}</p>
+        <p><b>WhatsApp:</b> {lead.whatsapp}</p>
+        <p><b>Zona:</b> {lead.zona || "Não definida"}</p>
+        <p><b>Bairro:</b> {lead.bairro || "Não definido"}</p>
+        <p><b>Região/Endereço:</b> {lead.regiao}</p>
+        <p><b>Tipo/Porte:</b> {lead.tipo} • {lead.porte}</p>
+        <p><b>Origem:</b> {lead.origem}</p>
+        <p><b>Plano:</b> {lead.volume}</p>
+        <p><b>Estimativa:</b> R$ {Number(lead.valor_estimado || 0).toLocaleString("pt-BR")}/mês</p>
+        <p><b>Ação atual:</b> {lead.acao_etapa || "Não definida"}</p>
       </div>
 
       <div className="box">
@@ -981,57 +1024,32 @@ function LeadCard({
 
         {contatos.map((contato) => (
           <p key={contato.id}>
-            <b>{contato.classificacao}:</b> {contato.nome || "Sem nome"} —{" "}
-            {contato.telefone || "sem telefone"}{" "}
-            {contato.email ? `— ${contato.email}` : ""}
-
+            <b>{contato.classificacao}:</b> {contato.nome || "Sem nome"} — {contato.telefone || "sem telefone"} {contato.email ? `— ${contato.email}` : ""}
             {isMaster && (
-              <button
-                className="secondary"
-                onClick={() => excluirContato(contato.id)}
-              >
+              <button className="secondary" onClick={() => excluirContato(contato.id)}>
                 Excluir
               </button>
             )}
           </p>
         ))}
 
-        <button onClick={() => adicionarContato(lead.id)}>
-          + Adicionar contato
-        </button>
+        <button onClick={() => adicionarContato(lead.id)}>+ Adicionar contato</button>
       </div>
 
       <label>Etapa do funil</label>
-      <select
-        value={lead.etapa}
-        onChange={(e) => atualizarLead(lead.id, "etapa", e.target.value)}
-      >
-        {etapas.map((etapa) => (
-          <option key={etapa}>{etapa}</option>
-        ))}
+      <select value={lead.etapa} onChange={(e) => atualizarLead(lead.id, "etapa", e.target.value)}>
+        {etapas.map((etapa) => <option key={etapa}>{etapa}</option>)}
       </select>
 
       <label>Ação comercial</label>
-      <select
-        value={lead.acao_etapa || acoes[0]}
-        onChange={(e) =>
-          atualizarLead(lead.id, "acao_etapa", e.target.value)
-        }
-      >
-        {acoes.map((acao) => (
-          <option key={acao}>{acao}</option>
-        ))}
+      <select value={lead.acao_etapa || acoes[0]} onChange={(e) => atualizarLead(lead.id, "acao_etapa", e.target.value)}>
+        {acoes.map((acao) => <option key={acao}>{acao}</option>)}
       </select>
 
       {isMaster && (
         <div className="actions">
-          <button className="secondary" onClick={() => setEditando(true)}>
-            Editar lead
-          </button>
-
-          <button className="secondary" onClick={() => excluirLead(lead.id)}>
-            Excluir lead
-          </button>
+          <button className="secondary" onClick={() => setEditando(true)}>Editar lead</button>
+          <button className="secondary" onClick={() => excluirLead(lead.id)}>Excluir lead</button>
         </div>
       )}
     </article>
