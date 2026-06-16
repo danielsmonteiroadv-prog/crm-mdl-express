@@ -3,8 +3,10 @@ import * as XLSX from "xlsx";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabase";
 
-const MASTER_EMAIL = "daniel.monteiro@logisticamdl.com.br";
-
+const MASTER_EMAILS = [
+  "daniel.monteiro@logisticamdl.com.br",
+  "suporte@logisticamdl.com.br",
+];
 const etapas = [
   "Lead Novo",
   "Qualificação",
@@ -103,7 +105,7 @@ export default function CRM() {
   const [novoLead, setNovoLead] = useState(novoLeadPadrao);
   const [contatosNovoLead, setContatosNovoLead] = useState([{ ...contatoPadrao }]);
 
-  const isMaster = usuario?.email === MASTER_EMAIL;
+  const isMaster = MASTER_EMAILS.includes(usuario?.email);
 
   const metaFormatada = metaMensal.toLocaleString("pt-BR", {
     style: "currency",
@@ -1048,9 +1050,26 @@ function LeadCard({
 
       {isMaster && (
         <div className="actions">
-          <button className="secondary" onClick={() => setEditando(true)}>Editar lead</button>
-          <button className="secondary" onClick={() => excluirLead(lead.id)}>Excluir lead</button>
-        </div>
+
+  {(isMaster || usuario?.perfil === "comercial") && (
+    <button
+      className="secondary"
+      onClick={() => setEditando(true)}
+    >
+      Editar lead
+    </button>
+  )}
+
+  {isMaster && (
+    <button
+      className="secondary"
+      onClick={() => excluirLead(lead.id)}
+    >
+      Excluir lead
+    </button>
+  )}
+
+</div>
       )}
     </article>
   );
