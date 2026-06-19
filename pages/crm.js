@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 const MASTER_EMAILS = [
   "daniel.monteiro@logisticamdl.com.br",
   "suporte@logisticamdl.com.br",
+  "comercial@logisticamdl.com.br",
 ];
 const etapas = [
   "Lead Novo",
@@ -89,6 +90,8 @@ export default function CRM() {
   const [usuario, setUsuario] = useState(null);
   const [leads, setLeads] = useState([]);
   const [contatos, setContatos] = useState([]);
+  const [comentarios, setComentarios] = useState({});
+  const [novoComentario, setNovoComentario] = useState({});
 
   const [query, setQuery] = useState("");
   const [etapaFiltro, setEtapaFiltro] = useState("Todas");
@@ -146,6 +149,26 @@ export default function CRM() {
 
     if (!error) setContatos(data || []);
   }
+  async function carregarComentarios() {
+  const { data, error } = await supabase
+    .from("lead_comentarios")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (!error) {
+    const agrupado = {};
+
+    (data || []).forEach((comentario) => {
+      if (!agrupado[comentario.lead_id]) {
+        agrupado[comentario.lead_id] = [];
+      }
+
+      agrupado[comentario.lead_id].push(comentario);
+    });
+
+    setComentarios(agrupado);
+  }
+}
 
   const leadsFiltrados = useMemo(() => {
     return leads.filter((lead) => {
@@ -239,7 +262,34 @@ export default function CRM() {
       prev.length === 1 ? prev : prev.filter((_, i) => i !== index)
     );
   }
+async function salvarComentario(leadId) {
+  const texto = novoComentario[leadId];
 
+  if (!texto?.trim()) {
+    alert("Digite um comentário antes de salvar.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("lead_comentarios")
+    .insert({
+      lead_id: leadId,
+      usuario_id: usuario?.id,
+      usuario_email: usuario?.email,
+      comentario: texto.trim(),
+    });
+
+  if (!error) {
+    setNovoComentario((prev) => ({
+      ...prev,
+      [leadId]: "",
+    }));
+
+    await carregarComentarios();
+  } else {
+    alert("Não foi possível salvar o comentário.");
+  }
+}
   async function adicionarLead() {
     if (!novoLead.empresa.trim()) {
       alert("Informe pelo menos o nome da empresa.");
@@ -278,6 +328,7 @@ export default function CRM() {
 
       await carregarLeads();
       await carregarContatos();
+      await carregarComentarios();
 
       setFormAberto(false);
       setNovoLead(novoLeadPadrao);
